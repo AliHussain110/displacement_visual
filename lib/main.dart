@@ -1,4 +1,8 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_shaders/flutter_shaders.dart';
+import 'package:sprung/sprung.dart';
 
 void main() {
   runApp(const MyApp());
@@ -46,15 +50,78 @@ class _DynamicDisplacementState extends State<DynamicDisplacement>
   }
 
   @override
+  void dispose() {
+    // TODO: implement dispose
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void updateDragPosition(DragUpdateDetails details) {
+    log(details.localPosition.toString());
+    double normalizedX = details.localPosition.dx;
+    double normalizedY = details.localPosition.dy;
+
+    double normalizedDetlaX = (details.delta.dx * 60).clamp(-500, 500);
+    double normalizedDetlaY = (details.delta.dy * 60).clamp(-500, 500);
+    setState(() {
+      _position = Offset(normalizedX, normalizedY);
+      if (details.delta != Offset.zero) {
+        _delta = Offset.lerp(
+          _delta,
+          Offset(normalizedDetlaX, normalizedDetlaY),
+          0.1,
+        )!;
+      }
+    });
+  }
+
+  void _endDragAnimation() {
+    log('Detlta: $_delta');
+
+    _animation =
+        Tween<Offset>(begin: _delta, end: Offset.zero).animate(
+          CurvedAnimation(parent: _controller, curve: Sprung.overDamped),
+        )..addListener(() {
+          setState(() {
+            _delta = _animation.value;
+          });
+        });
+    _controller.forward(from: 0.0);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(title: Text('Dynamic Displacement'), centerTitle: true),
-      body: GestureDetector(child: textWidget()),
+      body: GestureDetector(
+        onPanUpdate: updateDragPosition,
+        onPanEnd: (_) => _endDragAnimation(),
+        child: addShader(child: textWidget()),
+      ),
     );
   }
 
-  Padding textWidget() {
+  Widget addShader({required Widget child}) {
+    return ShaderBuilder((ctx, shader, _) {
+      return AnimatedSampler((img, size, canvas) {
+        shader
+          ..setFloat(0, _position.dx)
+          ..setFloat(1, _position.dy)
+          ..setFloat(2, _delta.dx)
+          ..setFloat(3, _delta.dy)
+          ..setFloat(4, size.width)
+          ..setFloat(5, size.height)
+          ..setImageSampler(0, img);
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, size.width, size.height),
+          Paint()..shader = shader,
+        );
+      }, child: child);
+    }, assetKey: 'shaders/shader.frag');
+  }
+
+  Widget textWidget() {
     return Padding(
       padding: const EdgeInsets.all(15),
       child: Text(
