@@ -11,10 +11,8 @@ uniform vec2 u_resolution;
 uniform sampler2D u_layerTexture;
 
 out vec4 fragColor;
-
 void main() {
     vec2 fragCoord = FlutterFragCoord().xy;
-    vec2 uv = fragCoord / u_resolution.xy;
     vec2 p = fragCoord;
     vec2 l = u_position;
 
@@ -23,10 +21,24 @@ void main() {
 
     for (float i = 0.0; i < 10.0; i++) {
         float s = 0.175 + 0.005 * i;
+        
+        // --- FIX START ---
+        // 1. Calculate the normalized and displaced screen coordinate (top-down Y)
+        vec2 displaced_screen_uv = (p + s * displacement) / u_resolution;
+        
+        // 2. Flip the Y-axis to match the texture's bottom-up orientation
+        vec2 correct_texture_uv = vec2(displaced_screen_uv.x, 1.0 - displaced_screen_uv.y); 
+        // --- FIX END ---
+        
         color += vec3(
-        texture(u_layerTexture, (p + s * displacement) / u_resolution).r,
-        texture(u_layerTexture, (p + (s + 0.025) * displacement) / u_resolution).g,
-        texture(u_layerTexture, (p + (s + 0.05) * displacement) / u_resolution).b
+            texture(u_layerTexture, correct_texture_uv).r,
+            
+            // Repeat the fix for the other two samples (with slightly different displacement for the trail effect)
+            texture(u_layerTexture, vec2(((p + (s + 0.025) * displacement) / u_resolution).x, 
+                                         1.0 - ((p + (s + 0.025) * displacement) / u_resolution).y)).g,
+                                         
+            texture(u_layerTexture, vec2(((p + (s + 0.05) * displacement) / u_resolution).x, 
+                                         1.0 - ((p + (s + 0.05) * displacement) / u_resolution).y)).b
         );
     }
 
